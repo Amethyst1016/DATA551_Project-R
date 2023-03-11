@@ -2,7 +2,6 @@ library(dash)
 library(dashCoreComponents)
 library(dashHtmlComponents)
 library(dashBootstrapComponents)
-library(ggplot2)
 library(plotly)
 library(tidyverse)
 library(zoo)
@@ -70,6 +69,7 @@ symbols <- list(
   list('label'='Nikkei_225', 'value'='Nikkei_225')
 )
 
+
 app$layout(
   htmlDiv(list(
     htmlDiv(list( # left part
@@ -128,13 +128,13 @@ app$layout(
         htmlDiv(list(
           dccDropdown(
             id='dropdown_sector',
-            options=c(),
-            value=c(),
+            options=options,
+            value=list(),
             style=list('width'=300, 'float'='left')),
           dccChecklist(
             id='checkbox_company',
             options=c(),
-            value=c(),
+            value=list(),
             style=list('float'='left', 'margin-left'=10))
         )),
         htmlDiv(htmlIframe(
@@ -150,5 +150,96 @@ app$layout(
   ), style=list('width'='80%', 'height'='100%', 'float'='right', 'margin'=0))
 ))
 )
+
+
+
+## miss 2 app$callback for tab 1 and 2
+## for tab 3, have issues with dropdown_sector and checkbox_company options.
+## modified line 131: "options=options,"
+
+app$callback(
+  list(output(id = 'dropdown_sector', property = 'options')),
+  list(input(id = 'time_range_selector', property = 'value')),
+  function(time_range){
+    df_top_5 <-  top_5_company(time_range, df_bar_chart)
+    sectors <- unique(df_top_5$GICS.Sector)
+    options <- lapply(sectors, function(x) list('label'=x, 'value'=x))
+    return (options)
+  }
+)
+
+app$callback(
+  list(output(id = 'dropdown_sector', property = 'value')),
+  list(input(id = 'time_range_selector', property = 'value')),
+  function(time_range){
+    df_top_5 <-  top_5_company(time_range, df_bar_chart)
+    sectors <- unique(df_top_5$GICS.Sector)
+    return (sectors[1])
+  }
+)
+
+# Define the callback to update the options of the checkbox based on the selected sector
+app$callback(
+  list(output(id = 'checkbox_company', property = 'options')),
+  list(input(id = 'dropdown_sector', property = 'value'),
+       input(id = 'time_range_selector', property = 'value')),
+  function(selected_sector, time_range){
+    df_top_5 <-  top_5_company(time_range, df_bar_chart)
+    df_top_5_selected_sector <- df_top_5 %>% filter(GICS.Sector %in% selected_sector)
+    top_5_symbol <- unique(df_top_5_selected_sector$Symbol)
+    options <- lapply(top_5_symbol, function(x) list('label'=x, 'value'=x))
+    return (options)
+  }
+)
+
+app$callback(
+  list(output(id = 'checkbox_company', property = 'value')),
+  list(input(id = 'dropdown_sector', property = 'value'),
+       input(id = 'time_range_selector', property = 'value')),
+  function(selected_sector, time_range){
+    df_top_5 <-  top_5_company(time_range, df_bar_chart)
+    df_top_5_selected_sector <- df_top_5 %>% filter(GICS.Sector %in% selected_sector)
+    top_5_symbol <- unique(df_top_5_selected_sector$Symbol)
+    return (top_5_symbol)
+  }
+)
+
+# Define the callback to update the graph based on the selected sector and companies
+app$callback(
+  list(output(id = 'scatter', property = 'srcDoc')),
+  list(input(id = 'dropdown_sector', property = 'value'),
+       input(id = 'checkbox_company', property = 'value'),
+       input(id = 'time_range_selector', property = 'value')),
+  function(selected_sector, selected_companies, time_range){
+    df_top_5 <-  top_5_company(time_range, df_bar_chart)
+    df_top_5_selected_sector <- df_top_5 %>% filter(GICS.Sector %in% selected_sector)
+    df_top_5_selected_sector['Date'] <- as.Date(df_top_5_selected_sector['Date'])
+
+    if (is.null(selected_companies) || length(selected_companies) == 0) {
+      # If no companies are selected, return an empty dataframe
+      df_top_5_selected_sector_company <- data.frame(matrix(ncol = ncol(df_top_5_selected_sector),
+                                                            nrow = 0,
+                                                            dimnames = list(NULL,
+                                                                            colnames(df_top_5_selected_sector))),
+                                                     stringsAsFactors = FALSE)
+    } else {
+      # Filter the dataframe based on the selected companies
+      df_top_5_selected_sector_company <- df_top_5_selected_sector %>%
+        filter(Symbol %in% selected_companies)
+    }
+
+    chart <- ggplot(df_top_5_selected_sector_company, aes(x = Date, y = Close, color = Symbol)) +
+      geom_line() +
+      geom_point() +
+      scale_color_manual(values = c('#FF0000', '#0000FF', '#00FF00', '#FF00FF', '#FFFF00')) +
+      labs(x = 'Date', y = 'Close Price', title = 'Top 5 companies in selected sector') +
+      theme(plot.title = element_text(hjust = 0.5))
+
+    return (chart)
+  }
+)
+
+
+
 
 app$run_server(debug = T)
