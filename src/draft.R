@@ -73,3 +73,44 @@ ggplot(df_top_5_selected_sector_company, aes(x = Date, y = Close, color = Symbol
   theme(plot.title = element_text(hjust = 0.5))
 
 
+
+df_top_5 <-  top_5_company(7, df_bar_chart)
+df_top_5_selected_sector <- df_top_5 %>% filter(GICS.Sector %in% 'Health Care')
+
+df_summary <- df_top_5_selected_sector %>%
+  group_by(Symbol) %>%
+  summarize(Volume = sum(Volume)) %>%
+  mutate(Proportion = Volume/sum(Volume))
+
+
+chart <- ggplot(df_summary, aes(x = '', y = Volume,
+                                color = Symbol, fill = Symbol)) +
+  geom_bar(stat = "identity") +
+  coord_polar(theta = "y")
+
+chart
+
+
+# Define the callback to update the graph based on the selected sector
+app$callback(
+  output(id = 'pie', property = 'figure'),
+  list(input(id = 'dropdown_sector', property = 'value'),
+       input(id = 'time_range_selector', property = 'value')),
+  function(selected_sector, time_range){
+    df_top_5 <-  top_5_company(time_range, df_bar_chart)
+    df_top_5_selected_sector <- df_top_5 %>% filter(GICS.Sector %in% selected_sector)
+
+    df_summary <- df_top_5_selected_sector %>%
+      group_by(Symbol) %>%
+      summarize(Volume = sum(Volume)) %>%
+      mutate(Proportion = Volume/sum(Volume))
+
+
+    chart <- ggplot(df_summary, aes(x = '', y = Volume, color = Symbol, fill = Symbol, label = Proportion)) +
+      geom_bar(stat = "identity") +
+      coord_polar(theta = "y")
+
+
+    ggplotly(chart)
+  }
+)

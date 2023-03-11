@@ -154,10 +154,27 @@ app$layout(
 )
 
 
+app$callback(
+  output(id = 'bar-chart', property = 'children'),
+  list(input(id = 'time_range_selector', property = 'value')),
+  function(time_range){
+    df_selected <-  select_time_range(df_bar_chart, time_range)
 
-## miss 2 app$callback for tab 1 and 2
-## for tab 3, have issues with dropdown_sector and checkbox_company options.
-## modified line 131: "options=options,"
+    sector_growth_rate <- df_selected %>%
+      group_by(`GICS Sector`) %>%
+      summarize(growth_rate = (last(Close) / first(Close) - 1))
+
+    sector_growth_rate$marker_color <- ifelse(sector_growth_rate$growth_rate > 0, 'green', 'red')
+
+    fig <- plot_ly(sector_growth_rate, x = ~`GICS Sector`, y = ~growth_rate, type = 'bar',
+                   marker = list(color = ~marker_color)) %>%
+      layout(title = 'Sector Growth Rates',
+             xaxis = list(title = 'Sector', categoryorder = 'total descending'),
+             yaxis = list(title = 'Growth Rate'))
+
+    return(fig)
+  }
+)
 
 app$callback(
   output(id = 'dropdown_sector', property = 'options'),
@@ -230,10 +247,32 @@ app$callback(
 
     chart <- ggplot(df_top_5_selected_sector_company, aes(x = Date, y = Close, color = Symbol)) +
       geom_line() +
-      geom_point() +
-      scale_color_manual(values = c('#FF0000', '#0000FF', '#00FF00', '#FF00FF', '#FFFF00')) +
+      geom_point()  +
       labs(x = 'Date', y = 'Close Price', title = 'Top 5 companies in selected sector') +
       theme(plot.title = element_text(hjust = 0.5))
+
+    ggplotly(chart)
+  }
+)
+
+# Define the callback to update the graph based on the selected sector
+app$callback(
+  output(id = 'pie', property = 'figure'),
+  list(input(id = 'dropdown_sector', property = 'value'),
+       input(id = 'time_range_selector', property = 'value')),
+  function(selected_sector, time_range){
+    df_top_5 <-  top_5_company(time_range, df_bar_chart)
+    df_top_5_selected_sector <- df_top_5 %>% filter(GICS.Sector %in% selected_sector)
+
+    df_summary <- df_top_5_selected_sector %>%
+      group_by(Symbol) %>%
+      summarize(Volume = sum(Volume)) %>%
+      mutate(Proportion = Volume/sum(Volume))
+
+
+    chart <- ggplot(df_summary, aes(x = '', y = Volume, color = Symbol, fill = Symbol, label = Proportion)) +
+      geom_bar(stat = "identity") +
+      coord_polar(theta = "y")
 
     ggplotly(chart)
   }
