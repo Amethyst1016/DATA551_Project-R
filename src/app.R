@@ -119,9 +119,8 @@ app$layout(
       ), label='Stock markets compare trend plot'),
       # tab 2 - SP500 sectors growth rate rank
       dbcTab(htmlDiv(
-        id='bar-chart',
-        children=c(),
-        style=list('width'='100%','height'='90vh')
+        dccGraph(id='bar-chart', figure=c(), style=list('width'='100%','height'='70vh', 'margin-top'='10vh'))
+        # style=list('width'='100%','height'='90vh')
       ), label='SP500 sectors growth rate rank'),
       # tab 3 - Top 5 companies in SP500 GICS sectors
       dbcTab(list(
@@ -153,61 +152,48 @@ app$layout(
 ))
 )
 
-
-# tab 1
 app$callback(
   output(id = 'line-chart', property = 'figure'),
-  list(input(id = 'symbol-dropdown', property = 'value'),
+  list(input(id = 'symbol-dropdown', property = 'value'), 
        input(id = 'compare-dropdown', property = 'value'),
        input(id = 'time_range_selector', property = 'value')),
   function(symbol, compare_symbol, time_range){
     df_selected <- select_time_range(df_line_chart, time_range)
-
-    fig <- subplot(
-      plot_ly(df_selected, x = ~Date, y = ~get(symbol), name = symbol, type = 'scatter', mode = 'lines'),
-      plot_ly(df_selected, x = ~Date, y = ~get(compare_symbol), name = compare_symbol, type = 'scatter', mode = 'lines'),
-      nrows = 2,
-      shareX = TRUE,
-      base_height = 300,
-      margin = list(l = 50, r = 50, b = 30, t = 30, pad = 4))
-
+    fig <- plot_ly()
+    fig <- fig %>% 
+      add_trace(x = df_selected$Date, y = unlist(df_selected[symbol], use.names=FALSE), name = symbol, mode = "lines+markers", type = "scatter") %>%
+      add_trace(x = df_selected$Date, y = unlist(df_selected[compare_symbol], use.names=FALSE), name = compare_symbol, yaxis = "y2", mode = "lines+markers", type = "scatter")
     fig <- fig %>% layout(
-      xaxis = list(title = 'Date'),
-      yaxis = list(title = symbol, showgrid = FALSE),
-      yaxis2 = list(title = compare_symbol, overlaying = 'y', side = 'right'),
-      hovermode = 'x',
-      title = paste(symbol, 'vs', compare_symbol, 'Price'))
-
-    return(fig)
-    }
-)
-
-
-# tab 2
-app$callback(
-  output(id = 'bar-chart', property = 'children'),
-  list(input(id = 'time_range_selector', property = 'value')),
-  function(time_range){
-    df_selected <-  select_time_range(df_bar_chart, time_range)
-
-    sector_growth_rate <- df_selected %>%
-      group_by(`GICS Sector`) %>%
-      summarize(growth_rate = (last(Close) / first(Close) - 1))
-
-    sector_growth_rate$marker_color <- ifelse(sector_growth_rate$growth_rate > 0, 'green', 'red')
-
-    fig <- plot_ly(sector_growth_rate, x = ~`GICS Sector`, y = ~growth_rate, type = 'bar',
-                   marker = list(color = ~marker_color)) %>%
-      layout(title = 'Sector Growth Rates',
-             xaxis = list(title = 'Sector', categoryorder = 'total descending'),
-             yaxis = list(title = 'Growth Rate'))
-
-    return(ggplotly(fig))
+      title = paste(symbol, ' vs ', compare_symbol),
+      xaxis = list(title="Date"),
+      yaxis = list(title=symbol),
+      yaxis2 = list(title=compare_symbol, overlaying = "y", side="right", gridcolor = 'ffff')
+    )
+    ggplotly(fig)
   }
 )
 
+app$callback(
+  output(id = 'bar-chart', property = 'figure'),
+  list(input(id = 'time_range_selector', property = 'value')),
+  function(time_range){
+    df_selected <-  select_time_range(df_bar_chart, time_range)
+    
+    sector_growth_rate <- df_selected %>%
+      group_by(GICS.Sector) %>%
+      summarize(growth_rate = (last(Close) / first(Close) - 1))
+    
+    sector_growth_rate$marker_color <- ifelse(sector_growth_rate$growth_rate > 0, 'green', 'red')
+    
+    fig <- plot_ly(x = sector_growth_rate$GICS.Sector, y = sector_growth_rate$growth_rate, 
+                   type = 'bar', marker = list(color = sector_growth_rate$marker_color)) %>%
+      layout(title = 'Sector Growth Rates',
+             xaxis = list(title = 'Sector', categoryorder = 'total descending'),
+             yaxis = list(title = 'Growth Rate'))
+    ggplotly(fig)
+  }
+)
 
-# tab 3
 app$callback(
   output(id = 'dropdown_sector', property = 'options'),
   list(input(id = 'time_range_selector', property = 'value')),
@@ -255,10 +241,6 @@ app$callback(
   }
 )
 
-
-# Create a vector of colors
-my_colors <- c('#293844', '#9791A0', '#6B8896', '#D8AEAE', '#75809C')
-
 # Define the callback to update the graph based on the selected sector and companies
 app$callback(
   output(id = 'scatter', property = 'figure'),
@@ -285,8 +267,7 @@ app$callback(
       geom_line() +
       geom_point()  +
       labs(x = 'Date', y = 'Close Price', title = 'Top 5 companies in selected sector') +
-      theme(plot.title = element_text(hjust = 0.5)) +
-      scale_color_manual(values = my_colors)
+      theme(plot.title = element_text(hjust = 0.5))
 
     ggplotly(chart)
   }
@@ -307,8 +288,7 @@ app$callback(
       mutate(Proportion = Volume/sum(Volume))
     
     fig <- plot_ly(type='pie', labels=df_summary$Symbol, values=df_summary$Volume, 
-                   textinfo='label+percent',
-                   marker = list(colors = my_colors))
+                   textinfo='label+percent')
 
     ggplotly(fig)
   }
