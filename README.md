@@ -1,6 +1,6 @@
 # Stock Market Dashboard
 
-Link to our dashboard: TBD
+Heroku dashboard link: https://data551rdash.herokuapp.com/
 
 ![sketch](sketch.jpeg)
 
